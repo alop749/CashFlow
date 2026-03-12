@@ -11,7 +11,7 @@
     --success: #10b981;
     --error: #ef4444;
     --warning: #f59e0b;
-    --border: rgba(255, 255, 255, 0.1);
+    --border: rgba(255, 255, 255, 0.2);
     --glass: rgba(255, 255, 255, 0.03);
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -156,12 +156,22 @@ label {
 input, select, textarea {
     width: 100%;
     padding: 0.75rem 1rem;
-    background: rgba(255, 255, 255, 0.05);
+    background: #1e293b; /* Solid background for visibility */
     border: 1px solid var(--border);
     border-radius: 0.75rem;
     color: var(--text);
     outline: none;
     transition: var(--transition);
+}
+
+select option {
+    background: #1e293b;
+    color: var(--text);
+}
+
+input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
 }
 
 input:focus, select:focus, textarea:focus {

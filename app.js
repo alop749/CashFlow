@@ -75,15 +75,20 @@ function showView(viewId) {
 // Authentication Handlers
 async function handleLogin(e) {
     e.preventDefault();
-    const emailInput = document.getElementById('login-email').value;
+    const emailInput = document.getElementById('login-email').value.trim().toLowerCase();
     const password = document.getElementById('login-password').value;
     const alert = document.getElementById('login-alert');
 
-    // Handle special @admin case
+    if (!emailInput || !password) {
+        showAlert(alert, '⚠️ Completa tu correo y contraseña.', 'warning');
+        return;
+    }
+
+    // Handle special admin cases
     let email = emailInput;
-    if (emailInput === '@admin' && password === 'admin') {
+    if ((emailInput === '@admin' || emailInput === 'admin') && password === 'admin') {
         email = 'admin@cashflow.local';
-    } else if (emailInput === '@admin') {
+    } else if (emailInput === '@admin' || emailInput === 'admin') {
         showAlert(alert, '❌ Credenciales incorrectas.', 'error');
         return;
     }
@@ -93,6 +98,9 @@ async function handleLogin(e) {
     if (error) {
         if (error.message.includes('Email not confirmed')) {
             showAlert(alert, '📩 Debes verificar tu correo antes de iniciar sesión.', 'warning');
+        } else if (error.message.includes('Invalid login credentials') && email === 'admin@cashflow.local') {
+            // Suggest creating the admin if it doesn't exist
+            showAlert(alert, '⚠️ La cuenta admin no existe aún. Por favor regístrate con admin@cashflow.local y contraseña admin.', 'warning');
         } else {
             showAlert(alert, '❌ Correo o contraseña incorrectos.', 'error');
         }
