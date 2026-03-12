@@ -231,6 +231,40 @@ input:focus, select:focus, textarea:focus {
     width: 100%;
 }
 
+.btn-icon {
+    padding: 0.4rem;
+    border-radius: 0.5rem;
+    background: var(--glass);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+
+.btn-icon:hover {
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+}
+
+.btn-icon.success {
+    color: var(--success);
+}
+
+.btn-icon.success:hover {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.btn-icon.error {
+    color: var(--error);
+}
+
+.btn-icon.error:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+}
+
 /* Alerts */
 .alert {
     padding: 1rem;
@@ -308,6 +342,8 @@ td {
 
 .badge-income { background: rgba(16, 185, 129, 0.1); color: var(--success); }
 .badge-expense { background: rgba(239, 68, 68, 0.1); color: var(--error); }
+.badge-neutral { background: rgba(148, 163, 184, 0.1); color: var(--text-muted); }
+.badge-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
 
 /* Responsive */
 @media (max-width: 768px) {

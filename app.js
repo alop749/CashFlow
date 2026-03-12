@@ -48,6 +48,12 @@ function setupEventListeners() {
 
     // Pending Form
     document.getElementById('pending-form').addEventListener('submit', handleNewPendingPayment);
+
+    // Profile Form
+    document.getElementById('profile-form').addEventListener('submit', handleUpdateProfile);
+
+    // Password Change Form
+    document.getElementById('password-change-form').addEventListener('submit', handleUpdatePassword);
 }
 
 function initUI() {
@@ -69,7 +75,7 @@ function showView(viewId) {
     if (viewId === 'dashboard') loadDashboard();
     if (viewId === 'transactions') loadTransactions();
     if (viewId === 'budget') loadPendingPayments();
-    if (viewId === 'admin') loadAdminPanel();
+    if (viewId === 'admin' || viewId === 'config') loadAdminPanel();
 }
 
 // Authentication Handlers
@@ -84,27 +90,46 @@ async function handleLogin(e) {
         return;
     }
 
+    // Handle login with username
+    let finalEmail = emailInput;
+    if (!emailInput.includes('@')) {
+        const { data: resolvedEmail, error: searchError } = await sb.rpc('get_email_by_username', { p_username: emailInput });
+        if (resolvedEmail && resolvedEmail.length > 0) {
+            finalEmail = resolvedEmail[0].email;
+        } else if (emailInput !== 'admin') { 
+            showAlert(alert, '❌ Usuario no encontrado.', 'error');
+            return;
+        }
+    }
+
     // Handle special admin cases
-    let email = emailInput;
-    if ((emailInput === '@admin' || emailInput === 'admin') && password === 'admin') {
-        email = 'admin@cashflow.local';
+    let loginEmail = finalEmail;
+    if ((emailInput === '@admin' || emailInput === 'admin') && password === 'Administrador1') {
+        loginEmail = 'admin@cashflow.local';
     } else if (emailInput === '@admin' || emailInput === 'admin') {
         showAlert(alert, '❌ Credenciales incorrectas.', 'error');
         return;
     }
 
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    const { data, error } = await sb.auth.signInWithPassword({ email: loginEmail, password });
 
     if (error) {
         if (error.message.includes('Email not confirmed')) {
             showAlert(alert, '📩 Debes verificar tu correo antes de iniciar sesión.', 'warning');
         } else if (error.message.includes('Invalid login credentials') && email === 'admin@cashflow.local') {
-            // Suggest creating the admin if it doesn't exist
-            showAlert(alert, '⚠️ La cuenta admin no existe aún. Por favor regístrate con admin@cashflow.local y contraseña admin.', 'warning');
+            showAlert(alert, '⚠️ La cuenta admin no existe aún. Por favor regístrate con admin@cashflow.local y contraseña Administrador1.', 'warning');
         } else {
             showAlert(alert, '❌ Correo o contraseña incorrectos.', 'error');
         }
     } else {
+        // Check if user is blocked
+        const { data: profile } = await sb.from('profiles').select('bloqueado').eq('id', data.user.id).single();
+        if (profile && profile.bloqueado) {
+            await sb.auth.signOut();
+            showAlert(alert, '🚫 Tu cuenta ha sido deshabilitada. Contacta al administrador.', 'error');
+            return;
+        }
+
         showAlert(alert, '✅ Sesión iniciada correctamente.', 'success');
         setTimeout(() => onLoginSuccess(data.user), 1500);
     }
@@ -112,6 +137,7 @@ async function handleLogin(e) {
 
 async function handleRegister(e) {
     e.preventDefault();
+    const username = document.getElementById('reg-username').value;
     const nombre = document.getElementById('reg-name').value;
     const email = document.getElementById('reg-email').value;
     const password = document.getElementById('reg-password').value;
@@ -132,7 +158,10 @@ async function handleRegister(e) {
         email,
         password,
         options: {
-            data: { nombre: nombre }
+            data: { 
+                nombre: nombre,
+                username: username
+            }
         }
     });
 
@@ -155,8 +184,19 @@ async function onLoginSuccess(user) {
 
     // UI Updates
     document.getElementById('logged-in-nav').style.display = 'flex';
-    document.getElementById('welcome-user').innerText = `Hola, ${profile ? profile.nombre : 'Usuario'}`;
     
+    // Personalized greeting
+    const greeting = getGreeting();
+    const userName = profile ? profile.nombre : 'Usuario';
+    document.getElementById('welcome-user').innerHTML = `${greeting}, <span style="color: var(--primary);">${userName}</span> 👋`;
+    
+    // Config View Info
+    if (profile) {
+        document.getElementById('conf-username').value = profile.username || '';
+        document.getElementById('conf-name').value = profile.nombre;
+        document.getElementById('conf-email').value = profile.email;
+    }
+
     // Auth Controls
     document.getElementById('auth-controls').innerHTML = `
         <button class="btn btn-outline" onclick="handleLogout()">
@@ -168,10 +208,78 @@ async function onLoginSuccess(user) {
     // Admin Access
     if (profile && profile.role === 'admin') {
         document.getElementById('admin-link').style.display = 'inline';
+        document.getElementById('admin-management-section').style.display = 'block';
+    } else {
+        document.getElementById('admin-link').style.display = 'none';
+        document.getElementById('admin-management-section').style.display = 'none';
     }
 
     showView('dashboard');
     loadCategories();
+}
+
+function getGreeting() {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Buenos días";
+    if (hour < 18) return "Buenas tardes";
+    return "Buenas noches";
+}
+
+async function handleUpdateProfile(e) {
+    e.preventDefault();
+    const username = document.getElementById('conf-username').value;
+    const nombre = document.getElementById('conf-name').value;
+    const email = document.getElementById('conf-email').value;
+    const alertEl = document.getElementById('profile-alert');
+
+    // Update Profile in DB
+    const { error: profileError } = await sb.from('profiles').update({ 
+        username,
+        nombre, 
+        email 
+    }).eq('id', currentUser.id);
+    
+    // Update Email in Auth (if changed)
+    let authError = null;
+    if (email !== currentUser.email) {
+        const { error } = await sb.auth.updateUser({ email });
+        authError = error;
+    }
+
+    if (profileError || authError) {
+        showAlert(alertEl, `❌ Error: ${profileError?.message || authError?.message}`, 'error');
+    } else {
+        showAlert(alertEl, '✅ Perfil actualizado correctamente.', 'success');
+        // Refresh session data
+        const { data: { user } } = await sb.auth.getUser();
+        onLoginSuccess(user);
+    }
+}
+
+async function handleUpdatePassword(e) {
+    e.preventDefault();
+    const newPass = document.getElementById('conf-new-pass').value;
+    const confirmPass = document.getElementById('conf-confirm-pass').value;
+    const alertEl = document.getElementById('security-alert');
+
+    if (newPass !== confirmPass) {
+        showAlert(alertEl, '❌ Las contraseñas no coinciden.', 'error');
+        return;
+    }
+
+    if (newPass.length < 8) {
+        showAlert(alertEl, '⚠️ Mínimo 8 caracteres.', 'warning');
+        return;
+    }
+
+    const { error } = await sb.auth.updateUser({ password: newPass });
+
+    if (error) {
+        showAlert(alertEl, `❌ Error: ${error.message}`, 'error');
+    } else {
+        showAlert(alertEl, '✅ Contraseña actualizada.', 'success');
+        e.target.reset();
+    }
 }
 
 async function handleLogout() {
@@ -295,36 +403,101 @@ async function loadPendingPayments() {
                     </div>
                     <div style="text-align: right;">
                         <div style="font-weight: 700;">${formatCurrency(p.monto)}</div>
-                        <button class="btn" style="padding: 0.2rem; margin-top: 0.5rem;" onclick="markAsPaid(${p.id})">
-                            <ion-icon name="checkmark-circle-outline" style="color: var(--success); font-size: 1.2rem;"></ion-icon>
-                        </button>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; justify-content: flex-end;">
+                            <button class="btn btn-icon" title="Editar" onclick="editPendingPayment(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+                                <ion-icon name="create-outline"></ion-icon>
+                            </button>
+                            ${p.estado === 'pendiente' ? `
+                            <button class="btn btn-icon success" title="Marcar como pagado" onclick="markAsPaid(${p.id})">
+                                <ion-icon name="checkmark-circle-outline"></ion-icon>
+                            </button>` : ''}
+                            <button class="btn btn-icon error" title="Eliminar" onclick="deletePendingPayment(${p.id})">
+                                <ion-icon name="trash-outline"></ion-icon>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         `).join('') || '<p style="color: var(--text-muted); text-align: center; padding: 1rem;">No hay pagos pendientes.</p>';
+
+        updateReminders(data);
+    }
+}
+
+function updateReminders(data) {
+    const remindersList = document.getElementById('reminders-list');
+    const upcoming = data.filter(p => p.estado === 'pendiente')
+                         .sort((a,b) => new Date(a.fecha_limite) - new Date(b.fecha_limite))
+                         .slice(0, 2);
+    
+    if (upcoming.length > 0) {
+        remindersList.innerHTML = upcoming.map(p => {
+            const daysLeft = Math.ceil((new Date(p.fecha_limite) - new Date()) / (1000 * 60 * 60 * 24));
+            return `
+                <div class="glass-panel" style="border-left: 4px solid var(--primary); margin-bottom: 0.5rem;">
+                    <p style="font-size: 0.9rem;">Próximo pago: <strong>${p.descripcion}</strong> en ${daysLeft} días.</p>
+                </div>
+            `;
+        }).join('');
+    } else {
+        remindersList.innerHTML = `
+            <div class="glass-panel" style="border-left: 4px solid var(--text-muted);">
+                <p style="font-size: 0.9rem; color: var(--text-muted);">No hay recordatorios próximos.</p>
+            </div>
+        `;
+    }
+}
+
+async function editPendingPayment(payment) {
+    document.getElementById('p-id').value = payment.id;
+    document.getElementById('p-desc').value = payment.descripcion;
+    document.getElementById('p-amount').value = payment.monto;
+    document.getElementById('p-date').value = payment.fecha_limite;
+    
+    document.getElementById('pending-modal-title').innerText = 'Editar Pago/Factura';
+    document.getElementById('pending-submit-btn').innerText = 'Actualizar';
+    
+    showModal('pending-modal');
+}
+
+async function deletePendingPayment(id) {
+    if (confirm("¿Estás seguro de eliminar este recordatorio?")) {
+        const { error } = await sb.from('pending_payments').delete().eq('id', id);
+        if (!error) loadPendingPayments();
     }
 }
 
 async function handleNewPendingPayment(e) {
     e.preventDefault();
+    const id = document.getElementById('p-id').value;
     const desc = document.getElementById('p-desc').value;
     const amount = document.getElementById('p-amount').value;
     const date = document.getElementById('p-date').value;
 
-    const { error } = await sb.from('pending_payments').insert({
+    const payload = {
         user_id: currentUser.id,
         descripcion: desc,
         monto: amount,
         fecha_limite: date,
         estado: 'pendiente'
-    });
+    };
 
-    if (error) {
-        alert("Error: " + error.message);
+    let result;
+    if (id) {
+        result = await sb.from('pending_payments').update(payload).eq('id', id);
+    } else {
+        result = await sb.from('pending_payments').insert(payload);
+    }
+
+    if (result.error) {
+        alert("Error: " + result.error.message);
     } else {
         closeModal('pending-modal');
         loadPendingPayments();
         e.target.reset();
+        document.getElementById('p-id').value = '';
+        document.getElementById('pending-modal-title').innerText = 'Nuevo Pago/Factura';
+        document.getElementById('pending-submit-btn').innerText = 'Programar';
     }
 }
 async function markAsPaid(id) {
@@ -341,20 +514,26 @@ async function deleteTransaction(id) {
 
 // Admin Panel
 async function loadAdminPanel() {
-    const { data, error } = await sb.from('profiles').select('*');
+    const { data, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
     if (!error) {
         const tbody = document.getElementById('admin-users-table');
+        if (!tbody) return;
+        
         tbody.innerHTML = data.map(u => `
             <tr>
-                <td>${u.nombre}</td>
+                <td><strong>${u.nombre}</strong></td>
                 <td>${u.email}</td>
-                <td><span class="badge ${u.bloqueado ? 'badge-expense' : 'badge-income'}">${u.bloqueado ? 'Bloqueado' : 'Activo'}</span></td>
-                <td>${u.verificado ? '✅' : '❌'}</td>
-                <td>${new Date(u.created_at).toLocaleDateString()}</td>
+                <td><span class="badge ${u.bloqueado ? 'badge-expense' : 'badge-income'}">${u.bloqueado ? 'Inactivo' : 'Activo'}</span></td>
+                <td><span class="badge badge-neutral">${u.role.toUpperCase()}</span></td>
                 <td>
-                    <button class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="toggleUserBlock('${u.id}', ${u.bloqueado})">
-                        ${u.bloqueado ? 'Desbloquear' : 'Bloquear'}
-                    </button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-outline btn-sm" onclick="toggleUserBlock('${u.id}', ${u.bloqueado})">
+                            ${u.bloqueado ? 'Habilitar' : 'Deshabilitar'}
+                        </button>
+                        <button class="btn btn-outline btn-sm" style="color: var(--error); border-color: var(--error);" onclick="deleteUser('${u.id}')">
+                            Dar de baja
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -364,6 +543,17 @@ async function loadAdminPanel() {
 async function toggleUserBlock(id, currentStatus) {
     const { error } = await sb.from('profiles').update({ bloqueado: !currentStatus }).eq('id', id);
     if (!error) loadAdminPanel();
+}
+
+async function deleteUser(id) {
+    if (confirm("¿Estás seguro de dar de baja a este usuario? Esta acción es irreversible.")) {
+        const { error } = await sb.from('profiles').delete().eq('id', id);
+        if (error) {
+            alert("Error: " + error.message);
+        } else {
+            loadAdminPanel();
+        }
+    }
 }
 
 // Charts

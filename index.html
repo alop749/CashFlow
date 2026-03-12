@@ -47,8 +47,8 @@
 
                             <form id="login-form">
                                 <div class="form-group">
-                                    <label for="login-email">Correo electrónico</label>
-                                    <input type="email" id="login-email" placeholder="ejemplo@correo.com" required>
+                                    <label for="login-email">Correo o Usuario</label>
+                                    <input type="text" id="login-email" placeholder="ejemplo@correo.com o usuario" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="login-password">Contraseña</label>
@@ -74,6 +74,10 @@
                             <div id="register-alert" class="alert"></div>
 
                             <form id="register-form">
+                                <div class="form-group">
+                                    <label for="reg-username">Nombre de usuario</label>
+                                    <input type="text" id="reg-username" placeholder="usuario123" required>
+                                </div>
                                 <div class="form-group">
                                     <label for="reg-name">Nombre completo</label>
                                     <input type="text" id="reg-name" placeholder="Tu nombre" required>
@@ -196,8 +200,86 @@
                     </div>
                     <div class="card">
                         <h3>Recordatorios Próximos</h3>
-                        <div class="glass-panel" style="border-left: 4px solid var(--primary);">
-                            <p style="font-size: 0.9rem;">Próximo pago: <strong>Arriendo</strong> en 3 días.</p>
+                        <div id="reminders-list">
+                            <div class="glass-panel" style="border-left: 4px solid var(--primary);">
+                                <p style="font-size: 0.9rem;">Próximo pago: <strong>Cargando...</strong></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Configuración View -->
+            <section id="view-config" class="view">
+                <header style="margin-bottom: 2rem;">
+                    <h1>Configuración</h1>
+                    <p style="color: var(--text-muted);">Gestiona tu cuenta y ajustes del sistema.</p>
+                </header>
+                
+                <div class="grid-2-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+                    <div class="card">
+                        <h3>Mi Perfil</h3>
+                        <div id="profile-alert" class="alert"></div>
+                        <form id="profile-form" style="margin-top: 1rem;">
+                            <div class="form-group">
+                                <label for="conf-username">Nombre de usuario</label>
+                                <input type="text" id="conf-username" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="conf-name">Nombre completo</label>
+                                <input type="text" id="conf-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="conf-email">Correo electrónico</label>
+                                <input type="email" id="conf-email" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block">Guardar Cambios</button>
+                        </form>
+                    </div>
+
+                    <div class="card">
+                        <h3>Seguridad</h3>
+                        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Cambia tu contraseña de acceso.</p>
+                        <div id="security-alert" class="alert"></div>
+                        <form id="password-change-form">
+                            <div class="form-group">
+                                <label for="conf-new-pass">Nueva contraseña</label>
+                                <input type="password" id="conf-new-pass" placeholder="••••••••" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="conf-confirm-pass">Confirmar contraseña</label>
+                                <input type="password" id="conf-confirm-pass" placeholder="••••••••" required>
+                            </div>
+                            <button type="submit" class="btn btn-outline btn-block">Actualizar Contraseña</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Admin Section in Config -->
+                <div id="admin-management-section" style="display: none;">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <h3>Gestión de Usuarios</h3>
+                            <button class="btn btn-outline btn-sm" onclick="loadAdminPanel()">
+                                <ion-icon name="refresh-outline"></ion-icon>
+                                <span>Actualizar</span>
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Usuario</th>
+                                        <th>Email</th>
+                                        <th>Estado</th>
+                                        <th>Rol</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-users-table">
+                                    <!-- Users list -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -273,10 +355,11 @@
     <div id="pending-modal" class="modal-overlay" style="display: none;">
         <div class="card modal-content" style="max-width: 500px; margin: 2rem auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>Nuevo Pago/Factura</h2>
+                <h2 id="pending-modal-title">Nuevo Pago/Factura</h2>
                 <ion-icon name="close-outline" style="font-size: 1.5rem; cursor: pointer;" onclick="closeModal('pending-modal')"></ion-icon>
             </div>
             <form id="pending-form">
+                <input type="hidden" id="p-id">
                 <div class="form-group">
                     <label>Descripción</label>
                     <input type="text" id="p-desc" placeholder="Ej: Pago de Internet" required>
@@ -289,7 +372,7 @@
                     <label>Fecha Límite</label>
                     <input type="date" id="p-date" required>
                 </div>
-                <button type="submit" class="btn btn-primary btn-block">Programar</button>
+                <button type="submit" id="pending-submit-btn" class="btn btn-primary btn-block">Programar</button>
             </form>
         </div>
     </div>
